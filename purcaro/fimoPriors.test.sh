@@ -4,6 +4,7 @@ mkdir -p purcaroFimoTest
 cd purcaroFimoTest
 
 # download a DNase-seq bigwig file from Encode
+# from experiment https://www.encodeproject.org/experiments/ENCSR000ENP/
 wget -c https://www.encodeproject.org/files/ENCFF001BDH/@@download/ENCFF001BDH.bigWig
 
 # I'm just testing on chr7; convert bigWig to wig and extract chr7
