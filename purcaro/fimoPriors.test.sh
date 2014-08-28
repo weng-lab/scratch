@@ -27,4 +27,4 @@ tar zxvf motif_databases.12.1.tgz
 # run fimo
 ~/bin/fimo_4.10/bin/fimo --thresh 0.05 --text --parse-genomic-coord --psp ./Prior/priors.wig --prior-dist ./Prior/priors.dist --motif MA0139.1 ./motif_databases/JASPAR_CORE_2014_vertebrates.meme ./chr7.fa > fimo.priors.chr7.txt
 
-grep '[+-]\t[^-]' ./fimo.priors.chr7.txt | wc -l
+grep -P '[+-]\t[^-]' ./fimo.priors.chr7.txt | wc -l
