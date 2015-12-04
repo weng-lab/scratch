@@ -28,6 +28,11 @@ def tsvToJson(fnp):
         headerTokens.add(e)
 
     data = [dict(zip(header, line)) for line in lines]
+
+    for idx, e in enumerate(data):
+        for key, val in e.iteritems():
+            if ';' in val:
+                data[idx][key] = val.split(';')
     outFnp = fnp + ".json"
     with open(outFnp, 'w') as f:
         json.dump(data, f)
