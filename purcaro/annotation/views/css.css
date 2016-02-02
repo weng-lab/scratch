@@ -1,0 +1,25 @@
+body {
+    padding-left: 10px;
+}
+
+.selectTissues table {
+    /*
+      border-collapse: separate;
+      border-spacing: 50px 0;
+      */
+}
+
+.selectTissues td {
+/*
+  padding-right: 10px 0;
+  */
+}
+
+#lociSearchBox {
+    width: 300px;
+}
+
+.checkboxTable {
+    width: auto;
+    min-width: 50%;
+}
