@@ -8,19 +8,12 @@ class ExpFileSimple:
     def __init__(self, fileJson):
         self.fileJson = fileJson
 
-        self.assembly = None
-        if "assembly" in fileJson:
-            self.assembly = fileJson["assembly"]
         self.file_type = self.fileJson["file_type"]
         self.url = "https://www.encodeproject.org" + self.fileJson["href"]
-                
-        self.biological_replicates = None
-        if "biological_replicates" in self.fileJson:
-            self.biological_replicates = self.fileJson["biological_replicates"]
-        
-        self.technical_replicates = None
-        if "technical_replicates" in self.fileJson:
-            self.technical_replicates = self.fileJson["technical_replicates"]
+
+        self.assembly = fileJson.get("assembly", None)
+        self.biological_replicates = fileJson.get("biological_replicates", None)
+        self.technical_replicates = fileJson.get("technical_replicates", None)
         
     def isBedNarrowPeak(self):
         return "bed narrowPeak" == self.file_type
