@@ -11,6 +11,8 @@ import requests
 import tempfile
 import os
 import shutil
+import dateutil.parser
+import operator
 
 USAGE = """USAGE: download-dnase.py <file>
 
@@ -65,9 +67,16 @@ class ExpFileSimple:
         self.file_type = self.fileJson["file_type"]
         self.url = "https://www.encodeproject.org" + self.fileJson["href"]
 
+        # date fields in older metadata didn't have time zones...
+        self.date_created = dateutil.parser.parse(fileJson["date_created"]).replace(tzinfo=None)
         self.assembly = fileJson.get("assembly", None)
         self.biological_replicates = fileJson.get("biological_replicates", None)
         self.technical_replicates = fileJson.get("technical_replicates", None)
+
+    def __getitem__(self, item):
+        if "date_created" == item:
+            return self.date_created
+        raise Exception("unknown item " + str(item))
 
     def download(self, dstFnp):
         r = requests.get(self.url)
@@ -82,11 +91,15 @@ class ExpFileSimple:
     def isFirstRepBedNarrowPeak(self, assembly):
         if assembly != self.assembly:
             return False
-        if self.status not in ["released"]:
+        if self.status not in ["released", "archived"]: # some experiments only have "archived" files...
             return False
         if not self.isBedNarrowPeak():
             return False
-        if not self.biological_replicates or 1 != self.biological_replicates[0]:
+        if 0 == len(self.biological_replicates):
+            return True # workaround for Crawford experiments where there are only 1 peak bed file...
+        if len(self.biological_replicates) > 1: # pooled
+            return False
+        if 1 not in self.biological_replicates:
             return False
         #print(self.accession, self.biological_replicates, self.technical_replicates)
         if not self.technical_replicates or "1_1" != self.technical_replicates[0]:
@@ -105,7 +118,7 @@ class ExpSimple:
         try:
             self.lab = self.expJson["lab"]["title"]
         except:
-            self.lab = ""
+            self.lab = "" # some experiments don't have labs??
         self.description = self.expJson["description"]
         self.files = [ExpFileSimple(x) for x in self.expJson["files"]]
 
@@ -118,9 +131,11 @@ class ExpSimple:
             return None
 
         if 1 != len(beds):
+            bed = max(beds, key=operator.itemgetter("date_created")) # get the most recent file...
+            return bed
             eprint("\tERROR", self.accession, assembly, "multiple first rep narrowPeak beds found")
             eprint("\t" + self.lab, self.description)
-            eprint("\t" + ",".join(beds))
+            eprint("\t" + ",".join([x.accession for x in beds]))
             return None
         return beds[0]
 
@@ -137,7 +152,7 @@ def main():
 
     assembly = "hg19"
 
-    if 0:
+    if 1:
         # Read the IDs and download each one.
         with open(idFileName, "r") as f:
             ids = [x.rstrip() for x in f]
