@@ -2,12 +2,15 @@
 # CREATE DATE: 30 Nov 2016
 # AUTHOR: William Stafford Noble
 #         Shamelessly cribbed from Michael Purcaro:
-#         https://github.com/weng-lab/scratch/blob/master/purcaro/exp_simple.py
+#         https://github.com/weng-lab/scratch/blob/master/purcaro/exp/exp_simple.py
+from __future__ import print_function
 import sys
 import urllib
 import json
-import subprocess
+import requests
+import tempfile
 import os
+import shutil
 
 USAGE = """USAGE: download-dnase.py <file>
 
@@ -16,20 +19,79 @@ USAGE = """USAGE: download-dnase.py <file>
 
 """
 
+def eprint(*args, **kwargs):
+    # Python-like print on stderr
+    # from http://stackoverflow.com/a/14981125
+    print(*args, file=sys.stderr, **kwargs)
+
+###############################################################################
+class QueryDCC:
+    # get and parse JSON metadata from encodeproject.org
+
+    def __init__(self, host=None, auth=True, cache=None):
+        self.auth = auth
+        self.host = "https://www.encodeproject.org"
+        if host:
+            self.host = host
+        self.cache = cache
+
+    def getURL(self, url):
+        r = requests.get(url)
+        if 200 != r.status_code:
+            raise Exception("could not download " + url)
+        return r.content
+
+    def getIDs(self, url):
+        # gets a list of experiment accessions
+        ret = self.getURL(url)
+        ret = json.loads(ret)
+        eids = []
+        for e in ret["@graph"]:
+            eid = e["@id"]
+            if not eid:
+                continue
+            eid = eid.split('/')[-2]
+            eids.append(eid)
+        return eids
+
 ###############################################################################
 class ExpFileSimple:
     def __init__(self, fileJson):
         self.fileJson = fileJson
 
+        self.accession = self.fileJson["accession"]
+        self.status = self.fileJson["status"]
+        self.file_name = os.path.basename(self.fileJson["href"])
         self.file_type = self.fileJson["file_type"]
         self.url = "https://www.encodeproject.org" + self.fileJson["href"]
 
         self.assembly = fileJson.get("assembly", None)
         self.biological_replicates = fileJson.get("biological_replicates", None)
         self.technical_replicates = fileJson.get("technical_replicates", None)
-        
+
+    def download(self, dstFnp):
+        r = requests.get(self.url)
+        with tempfile.NamedTemporaryFile("wb", delete=False) as f:
+            f.write(r.content)
+            fnpTmp = f.name
+        shutil.move(fnpTmp, dstFnp)
+
     def isBedNarrowPeak(self):
         return "bed narrowPeak" == self.file_type
+
+    def isFirstRepBedNarrowPeak(self, assembly):
+        if assembly != self.assembly:
+            return False
+        if self.status not in ["released"]:
+            return False
+        if not self.isBedNarrowPeak():
+            return False
+        if not self.biological_replicates or 1 != self.biological_replicates[0]:
+            return False
+        #print(self.accession, self.biological_replicates, self.technical_replicates)
+        if not self.technical_replicates or "1_1" != self.technical_replicates[0]:
+            return False
+        return True
 
 ###############################################################################
 class ExpSimple:
@@ -39,26 +101,28 @@ class ExpSimple:
         url = "https://www.encodeproject.org/experiments/" + accession + "/?format=json"
         response = urllib.urlopen(url)
         self.expJson = json.loads(response.read())
-        
-    def getBedNarrowPeak(self):
-        returnValue = ""
-        
-        for fileJson in self.expJson["files"]:
-            f = ExpFileSimple(fileJson)
-            foundIt = False
-            if (f.isBedNarrowPeak()
-#                and f.assembly == "hg19"
-#                and f.biological_replicates == "[1]"
-#                and f.technical_replicates == "1_1"
-            ):
-#                print(f.assembly, f.biological_replicates, f.technical_replicates, f.url)
-#                sys.stdout.write("f.assembly=%s " % f.biological_replicates)
-#                sys.stdout.write("f.biological_replicates=%s " % f.biological_replicates)
-#                sys.stdout.write("f.technical_replicates=%s\n" % f.technical_replicates)
-                returnValue = f.url
-                break
-        return(returnValue)
-        
+
+        try:
+            self.lab = self.expJson["lab"]["title"]
+        except:
+            self.lab = ""
+        self.description = self.expJson["description"]
+        self.files = [ExpFileSimple(x) for x in self.expJson["files"]]
+
+    def getFirstRepBedNarrowPeak(self, assembly):
+        beds = filter(lambda x: x.isFirstRepBedNarrowPeak(assembly), self.files)
+
+        if 0 == len(beds):
+            eprint("\tERROR", self.accession, assembly, "no first rep narrowPeak beds found")
+            eprint("\t" + self.lab, self.description)
+            return None
+
+        if 1 != len(beds):
+            eprint("\tERROR", self.accession, assembly, "multiple first rep narrowPeak beds found")
+            eprint("\t" + self.lab, self.description)
+            eprint("\t" + ",".join(beds))
+            return None
+        return beds[0]
 
 ###############################################################################
 # MAIN
@@ -71,35 +135,44 @@ def main():
         sys.exit(1)
     idFileName = sys.argv[1]
 
-    # Read the IDs and download each one.
-    idFile = open(idFileName, "r")
-    for myID in idFile:
-        myID = myID.rstrip()
+    assembly = "hg19"
+
+    if 0:
+        # Read the IDs and download each one.
+        with open(idFileName, "r") as f:
+            ids = [x.rstrip() for x in f]
+    else:
+        # get a list of DNase experiment IDs from the portal
+        qd = QueryDCC()
+
+        # url is based on Cricket's total processed DNase url from her google doc
+        # https://docs.google.com/spreadsheets/d/1S1rBEqs-C2GB2ilu5GMOHeSQcQ_Y8iFCrTPObX9mnyU/edit#gid=1988961282
+        # also removes experiments w/ "low read depth" red badges
+        url = "https://www.encodeproject.org/search/?type=Experiment&assay_title=DNase-seq&files.analysis_step_version.analysis_step.pipelines.title=DNase-HS+pipeline+%28paired-end%29&files.analysis_step_version.analysis_step.pipelines.title=DNase-HS+pipeline+%28single-end%29&files.file_type=bigBed+broadPeak&files.lab.name=encode-processing-pipeline&status=released&award.rfa=ENCODE3&award.rfa=Roadmap&award.rfa=ENCODE2&award.rfa=ENCODE2-Mouse&assembly=" + assembly + "&audit.ERROR.category!=extremely+low+read+depth&limit=all&format=json"
+
+        ids = qd.getIDs(url)
+
+    print("found", len(ids), "ENCODE accessions...")
+
+    for myID in sorted(ids):
         sys.stderr.write("Retrieving %s.\n" % myID)
 
-        # Use Michael's fancy class to get the right URL.
+        # Use Michael's fancy class to get the right file.
         e = ExpSimple(myID)
-        url = e.getBedNarrowPeak()
-        if (url == ""):
-            sys.stdout.write("Could not find %s.\n" % myID)
+        f = e.getFirstRepBedNarrowPeak(assembly)
+        if f is None:
+            sys.stdout.write("\tCould not find %s.\n" % myID)
+            continue
 
-        # Download the associated file.
-        # (Yes, I know I could use a Python module to do this ...)
-        command="wget --no-host-directories %s" % url
-        sys.stderr.write("%s\n" % command)
-        returnValue = subprocess.call(command, shell=True)
-        if (returnValue != 0):
-            sys.stderr.write("Non-zero exit (%d) from command: %s\n"
-                             % (returnValue, command))
-            sys.exit(1)
-
-        # Rename it to match the original experiment ID.
-        name = url.split("/")[-1]
-        sys.stderr.write("Renaming from %s to %s.bed.gz.\n"
-                         % (name, myID))
-        os.rename(name, "%s.bed.gz" % myID)
-        sys.exit(1)
+        # Download it to match the original experiment ID.
+        fn = myID + ".bed.gz"
+        if os.path.exists(fn):
+            sys.stderr.write("\tAlready downloaded %s to %s\n"
+                             % (f.url, fn))
+        else:
+            sys.stderr.write("\tDownloading %s to %s\n"
+                             % (f.url, fn))
+            f.download(fn)
 
 if __name__ == "__main__":
     sys.exit(main())
-    
