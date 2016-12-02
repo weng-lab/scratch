@@ -113,9 +113,16 @@ class ExpSimple:
     def __init__(self, accession):
         self.accession = accession
 
-        url = "https://www.encodeproject.org/experiments/" + accession + "/?format=json"
-        response = urllib.urlopen(url)
-        self.expJson = json.loads(response.read())
+        # Michael's local cache
+        localPath = os.path.join('/project/umw_zhiping_weng/0_metadata/encode/json/exps',
+                                 accession + ".json")
+        if os.path.exists(localPath):
+            with open(localPath) as f:
+                self.expJson = json.load(f)
+        else:
+            url = "https://www.encodeproject.org/experiments/" + accession + "/?format=json"
+            response = urllib.urlopen(url)
+            self.expJson = json.loads(response.read())
 
         try:
             self.lab = self.expJson["lab"]["title"]
@@ -128,7 +135,8 @@ class ExpSimple:
         preferredBioAndTechReps = [ ([1], '1_1'),
                                     ([2], '2_1'),
                                     ([1,2], None),
-                                    ([], None) ]
+                                    ([], None),
+                                    ([1], None) ]
 
         for bioReps, techReps in preferredBioAndTechReps:
             beds = filter(lambda x: x.isRightFile(assembly, bioReps, techReps, debug),
@@ -137,18 +145,31 @@ class ExpSimple:
                 break
 
         if 0 == len(beds):
-            eprint("\tERROR", self.accession, assembly, "no first rep narrowPeak beds found")
+            eprint("\tERROR", self.accession, assembly, "no narrowPeak beds found")
             eprint("\t" + self.lab, self.description)
             return None
 
         if 1 != len(beds):
             bed = max(beds, key=operator.itemgetter("date_created")) # get the most recent file...
             return bed
-            eprint("\tERROR", self.accession, assembly, "multiple first rep narrowPeak beds found")
+            eprint("\tERROR", self.accession, assembly, "multiple narrowPeak beds found")
             eprint("\t" + self.lab, self.description)
             eprint("\t" + ",".join([x.accession for x in beds]))
             return None
         return beds[0]
+
+###############################################################################
+def loadIDsFromFile(args):
+    if 1 != len(args.files):
+        sys.stderr.write(USAGE)
+        sys.exit(1)
+    idFileName = args.files[0]
+
+    # Read the IDs
+    with open(idFileName, "r") as f:
+        ids = [x.rstrip() for x in f]
+    sys.stderr.write("Read %d IDs accession from %s.\n" % (len(ids), idFileName))
+    return ids
 
 ###############################################################################
 def querydcc(args):
@@ -166,8 +187,8 @@ def querydcc(args):
 
 ###############################################################################
 def processIDs(assembly, ids, debug):
-    for myID in sorted(ids):
-        sys.stderr.write("Retrieving %s.\n" % myID)
+    for idx, myID in enumerate(sorted(ids)):
+        sys.stderr.write("Retrieving %d of %d %s\n" % (idx + 1, len(ids), myID))
 
         # Use Michael's fancy class to get the right file.
         e = ExpSimple(myID)
@@ -212,15 +233,23 @@ def main():
     if args.querydcc:
         ids = querydcc(args)
     else:
-        if 1 != len(args.files):
-            sys.stderr.write(USAGE)
-            sys.exit(1)
-        idFileName = args.files[0]
+        ids = loadIDsFromFile(args)
 
-        # Read the IDs
-        with open(idFileName, "r") as f:
-            ids = [x.rstrip() for x in f]
-        sys.stderr.write("Read %d IDs accession from %s.\n" % (len(ids), idFileName))
+    blacklist = [
+        # no processed files (Stam Roadmap)
+        'ENCSR035QHH', 'ENCSR349VEQ', 'ENCSR419TWM', 'ENCSR468ZXN', 'ENCSR492APB',
+        'ENCSR704HNG', 'ENCSR714DIF', 'ENCSR731QLJ', 'ENCSR815KXD',
+
+        # no hg19 files, also GGR project'
+        'ENCSR077EYC', 'ENCSR128IVG', 'ENCSR294XUZ', 'ENCSR347CEH', 'ENCSR660OQE',
+        'ENCSR384KCZ', 'ENCSR406EMB', 'ENCSR523FJT', 'ENCSR565WPR', 'ENCSR599WJC',
+        'ENCSR837VHE',
+
+        # missing experiment from ENCODE portal?
+        'ENCSR699ZLY',
+    ]
+
+    ids = filter(lambda x: x not in blacklist, ids)
 
     # download each exp
     return processIDs(args.assembly, ids, args.debug)
