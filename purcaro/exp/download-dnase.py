@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 # CREATE DATE: 30 Nov 2016
-# AUTHOR: William Stafford Noble
-#         Shamelessly cribbed from Michael Purcaro:
-#         https://github.com/weng-lab/scratch/blob/master/purcaro/exp/exp_simple.py
+# AUTHOR: William Stafford Noble and  Michael Purcaro:
+#         https://github.com/weng-lab/scratch/blob/master/purcaro/exp/download-dnase.py
 from __future__ import print_function
 import sys
 import urllib
@@ -21,6 +20,7 @@ USAGE = """USAGE: download-dnase.py <file>
 
 """
 
+###############################################################################
 def eprint(*args, **kwargs):
     # Python-like print on stderr
     # from http://stackoverflow.com/a/14981125
@@ -156,6 +156,7 @@ def main():
         # Read the IDs and download each one.
         with open(idFileName, "r") as f:
             ids = [x.rstrip() for x in f]
+        sys.stderr.write("Read %d IDs accession from %s.\n" % (len(ids), idFileName))
     else:
         # get a list of DNase experiment IDs from the portal
         qd = QueryDCC()
@@ -166,8 +167,7 @@ def main():
         url = "https://www.encodeproject.org/search/?type=Experiment&assay_title=DNase-seq&files.analysis_step_version.analysis_step.pipelines.title=DNase-HS+pipeline+%28paired-end%29&files.analysis_step_version.analysis_step.pipelines.title=DNase-HS+pipeline+%28single-end%29&files.file_type=bigBed+broadPeak&files.lab.name=encode-processing-pipeline&status=released&award.rfa=ENCODE3&award.rfa=Roadmap&award.rfa=ENCODE2&award.rfa=ENCODE2-Mouse&assembly=" + assembly + "&audit.ERROR.category!=extremely+low+read+depth&limit=all&format=json"
 
         ids = qd.getIDs(url)
-
-    print("found", len(ids), "ENCODE accessions...")
+        sys.stderr.write("Found %d accession IDs from ENCODE portal.\n" % len(ids))
 
     for myID in sorted(ids):
         sys.stderr.write("Retrieving %s.\n" % myID)
@@ -176,8 +176,8 @@ def main():
         e = ExpSimple(myID)
         f = e.getFirstRepBedNarrowPeak(assembly)
         if f is None:
-            sys.stdout.write("\tCould not find %s.\n" % myID)
-            continue
+            sys.stderr.write("\tCould not find %s.\n" % myID)
+            sys.exit(1)
 
         # Download it to match the original experiment ID.
         fn = myID + ".bed.gz"
