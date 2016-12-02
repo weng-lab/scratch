@@ -101,12 +101,7 @@ class ExpFileSimple:
         if bioReps != self.biological_replicates:
             if debug: eprint("\tisFirstRepBedNarrowPeak", "mismatch bioReps")
             return False
-        if len(self.biological_replicates) != len(bioReps):
-            if debug: eprint("\tisFirstRepBedNarrowPeak", "mismatch bioReps length")
-            return False
         if debug: print(self.accession, self.biological_replicates, self.technical_replicates)
-        if 0 == len(self.biological_replicates):
-            return True # workaround for Crawford experiments where there are only 1 peak bed file...
         if techReps:
             if not self.technical_replicates or techReps != self.technical_replicates[0]:
                 if debug: eprint("\tisFirstRepBedNarrowPeak", "mismatch tech reps")
