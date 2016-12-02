@@ -19,6 +19,11 @@ USAGE = """USAGE: download-dnase.py <file>
   Input is a list of ENCODE DNase-seq experiment IDs.  The program
   gets the first replicate narrow peak BED file for each experiment.
 
+  options:
+     --assembly: change default assembly to match on (hg19)
+     --debug:    print debugging information
+     --ids:      only download bed for accessions in comma-seperated list
+     --querydcc: download list of DNase-seq experiments from encodeproject.org
 """
 
 ###############################################################################
@@ -133,10 +138,10 @@ class ExpSimple:
 
     def getRightBedNarrowPeak(self, assembly, debug):
         preferredBioAndTechReps = [ ([1], '1_1'),
+                                    ([1], None),
                                     ([2], '2_1'),
                                     ([1,2], None),
-                                    ([], None),
-                                    ([1], None) ]
+                                    ([], None) ]
 
         for bioReps, techReps in preferredBioAndTechReps:
             beds = filter(lambda x: x.isRightFile(assembly, bioReps, techReps, debug),
@@ -209,12 +214,30 @@ def processIDs(assembly, ids, debug):
     return 0
 
 ###############################################################################
+def filterBlacklist(ids):
+    blacklist = [
+        # no processed files (Stam Roadmap)
+        'ENCSR035QHH', 'ENCSR349VEQ', 'ENCSR419TWM', 'ENCSR468ZXN', 'ENCSR492APB',
+        'ENCSR704HNG', 'ENCSR714DIF', 'ENCSR731QLJ', 'ENCSR815KXD',
+
+        # no hg19 files, also GGR project'
+        'ENCSR077EYC', 'ENCSR128IVG', 'ENCSR294XUZ', 'ENCSR347CEH', 'ENCSR660OQE',
+        'ENCSR384KCZ', 'ENCSR406EMB', 'ENCSR523FJT', 'ENCSR565WPR', 'ENCSR599WJC',
+        'ENCSR837VHE',
+
+        # missing experiment from ENCODE portal?
+        'ENCSR699ZLY',
+    ]
+
+    return filter(lambda x: x not in blacklist, ids)
+
+###############################################################################
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--debug', action="store_true", default=False)
-    parser.add_argument('--querydcc', action="store_true", default=False)
-    parser.add_argument('--ids', type=str, default="")
     parser.add_argument('--assembly', type=str, default="hg19")
+    parser.add_argument('--debug', action="store_true", default=False)
+    parser.add_argument('--ids', type=str, default="")
+    parser.add_argument('--querydcc', action="store_true", default=False)
     parser.add_argument("files", nargs='*', default="")
     args = parser.parse_args()
     return args
@@ -234,22 +257,7 @@ def main():
         ids = querydcc(args)
     else:
         ids = loadIDsFromFile(args)
-
-    blacklist = [
-        # no processed files (Stam Roadmap)
-        'ENCSR035QHH', 'ENCSR349VEQ', 'ENCSR419TWM', 'ENCSR468ZXN', 'ENCSR492APB',
-        'ENCSR704HNG', 'ENCSR714DIF', 'ENCSR731QLJ', 'ENCSR815KXD',
-
-        # no hg19 files, also GGR project'
-        'ENCSR077EYC', 'ENCSR128IVG', 'ENCSR294XUZ', 'ENCSR347CEH', 'ENCSR660OQE',
-        'ENCSR384KCZ', 'ENCSR406EMB', 'ENCSR523FJT', 'ENCSR565WPR', 'ENCSR599WJC',
-        'ENCSR837VHE',
-
-        # missing experiment from ENCODE portal?
-        'ENCSR699ZLY',
-    ]
-
-    ids = filter(lambda x: x not in blacklist, ids)
+        ids = filterBlacklist(ids)
 
     # download each exp
     return processIDs(args.assembly, ids, args.debug)
