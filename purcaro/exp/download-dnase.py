@@ -155,6 +155,21 @@ class ExpSimple:
             return None
         return beds[0]
 
+###############################################################################
+def querydcc(args):
+    # get a list of DNase experiment IDs from the portal
+    qd = QueryDCC()
+
+    # url is based on Cricket's total processed DNase url from her google doc
+    # https://docs.google.com/spreadsheets/d/1S1rBEqs-C2GB2ilu5GMOHeSQcQ_Y8iFCrTPObX9mnyU/edit#gid=1988961282
+    # also removes experiments w/ "low read depth" red badges
+    url = "https://www.encodeproject.org/search/?type=Experiment&assay_title=DNase-seq&files.analysis_step_version.analysis_step.pipelines.title=DNase-HS+pipeline+%28paired-end%29&files.analysis_step_version.analysis_step.pipelines.title=DNase-HS+pipeline+%28single-end%29&files.file_type=bigBed+broadPeak&files.lab.name=encode-processing-pipeline&status=released&award.rfa=ENCODE3&award.rfa=Roadmap&award.rfa=ENCODE2&award.rfa=ENCODE2-Mouse&assembly=" + args.assembly + "&audit.ERROR.category!=extremely+low+read+depth&limit=all&format=json"
+
+    ids = qd.getIDs(url)
+    sys.stderr.write("Found %d accession IDs from ENCODE portal.\n" % len(ids))
+    return ids
+
+###############################################################################
 def processIDs(assembly, ids, debug):
     for myID in sorted(ids):
         sys.stderr.write("Retrieving %s.\n" % myID)
@@ -181,6 +196,7 @@ def processIDs(assembly, ids, debug):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--debug', action="store_true", default=False)
+    parser.add_argument('--querydcc', action="store_true", default=False)
     parser.add_argument('--ids', type=str, default="")
     parser.add_argument('--assembly', type=str, default="hg19")
     parser.add_argument("files", nargs='*', default="")
@@ -198,28 +214,20 @@ def main():
         ids = sorted(list(set(args.ids.split(','))))
         return processIDs(args.assembly, ids, args.debug)
 
-    if 1 != len(args.files):
-        sys.stderr.write(USAGE)
-        sys.exit(1)
-    idFileName = args.files[0]
+    if args.querydcc:
+        ids = querydcc(args)
+    else:
+        if 1 != len(args.files):
+            sys.stderr.write(USAGE)
+            sys.exit(1)
+        idFileName = args.files[0]
 
-    if 1:
-        # Read the IDs and download each one.
+        # Read the IDs
         with open(idFileName, "r") as f:
             ids = [x.rstrip() for x in f]
         sys.stderr.write("Read %d IDs accession from %s.\n" % (len(ids), idFileName))
-    else:
-        # get a list of DNase experiment IDs from the portal
-        qd = QueryDCC()
 
-        # url is based on Cricket's total processed DNase url from her google doc
-        # https://docs.google.com/spreadsheets/d/1S1rBEqs-C2GB2ilu5GMOHeSQcQ_Y8iFCrTPObX9mnyU/edit#gid=1988961282
-        # also removes experiments w/ "low read depth" red badges
-        url = "https://www.encodeproject.org/search/?type=Experiment&assay_title=DNase-seq&files.analysis_step_version.analysis_step.pipelines.title=DNase-HS+pipeline+%28paired-end%29&files.analysis_step_version.analysis_step.pipelines.title=DNase-HS+pipeline+%28single-end%29&files.file_type=bigBed+broadPeak&files.lab.name=encode-processing-pipeline&status=released&award.rfa=ENCODE3&award.rfa=Roadmap&award.rfa=ENCODE2&award.rfa=ENCODE2-Mouse&assembly=" + args.assembly + "&audit.ERROR.category!=extremely+low+read+depth&limit=all&format=json"
-
-        ids = qd.getIDs(url)
-        sys.stderr.write("Found %d accession IDs from ENCODE portal.\n" % len(ids))
-
+    # download each exp
     return processIDs(args.assembly, ids, args.debug)
 
 if __name__ == "__main__":
