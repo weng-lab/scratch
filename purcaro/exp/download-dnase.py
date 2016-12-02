@@ -101,7 +101,7 @@ class ExpFileSimple:
         if bioReps != self.biological_replicates:
             if debug: eprint("\tisFirstRepBedNarrowPeak", "mismatch bioReps")
             return False
-        if len(self.biological_replicates) != len(bioReps): # pooled
+        if len(self.biological_replicates) != len(bioReps):
             if debug: eprint("\tisFirstRepBedNarrowPeak", "mismatch bioReps length")
             return False
         if debug: print(self.accession, self.biological_replicates, self.technical_replicates)
