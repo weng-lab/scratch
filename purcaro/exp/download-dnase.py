@@ -183,6 +183,7 @@ def parse_args():
     parser.add_argument('--debug', action="store_true", default=False)
     parser.add_argument('--ids', type=str, default="")
     parser.add_argument('--assembly', type=str, default="hg19")
+    parser.add_argument("files", nargs='*', default="")
     args = parser.parse_args()
     return args
 
@@ -190,17 +191,17 @@ def parse_args():
 # MAIN
 ###############################################################################
 def main():
+    # Parse the command line.
     args = parse_args()
 
     if args.ids:
         ids = sorted(list(set(args.ids.split(','))))
         return processIDs(args.assembly, ids, args.debug)
 
-    # Parse the command line.
-    if (len(sys.argv) != 2):
+    if 1 != len(args.files):
         sys.stderr.write(USAGE)
         sys.exit(1)
-    idFileName = sys.argv[1]
+    idFileName = args.files[0]
 
     if 1:
         # Read the IDs and download each one.
