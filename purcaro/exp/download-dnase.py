@@ -93,18 +93,18 @@ class ExpFileSimple:
         if assembly != self.assembly:
             return False
         if self.status not in ["released", "archived"]: # some experiments only have "archived" files...
-            if debug: eprint("\tisFirstRepBedNarrowPeak", "mismatch status")
+            if debug: eprint("\tisRightFile", "mismatch status")
             return False
         if not self.isBedNarrowPeak():
             return False
         if debug: eprint(bioReps, self.biological_replicates)
         if bioReps != self.biological_replicates:
-            if debug: eprint("\tisFirstRepBedNarrowPeak", "mismatch bioReps")
+            if debug: eprint("\tisRightFile", "mismatch bioReps")
             return False
         if debug: print(self.accession, self.biological_replicates, self.technical_replicates)
         if techReps:
             if not self.technical_replicates or techReps != self.technical_replicates[0]:
-                if debug: eprint("\tisFirstRepBedNarrowPeak", "mismatch tech reps")
+                if debug: eprint("\tisRightFile", "mismatch tech reps")
                 return False
         return True
 
@@ -124,7 +124,7 @@ class ExpSimple:
         self.description = self.expJson["description"]
         self.files = [ExpFileSimple(x) for x in self.expJson["files"]]
 
-    def getFirstRepBedNarrowPeak(self, assembly, debug):
+    def getRightBedNarrowPeak(self, assembly, debug):
         preferredBioAndTechReps = [ ([1], '1_1'),
                                     ([2], '2_1'),
                                     ([1,2], None),
@@ -171,7 +171,7 @@ def processIDs(assembly, ids, debug):
 
         # Use Michael's fancy class to get the right file.
         e = ExpSimple(myID)
-        f = e.getFirstRepBedNarrowPeak(assembly, debug)
+        f = e.getRightBedNarrowPeak(assembly, debug)
         if f is None:
             sys.stderr.write("\tCould not find %s.\n" % myID)
             sys.exit(1)
